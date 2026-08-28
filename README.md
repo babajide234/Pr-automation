@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: <this-org>/pr-doc-engine@v1
+      - uses: babajide234/Pr-automation@v1
         with:
           google-credentials: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
           config-path: .pr-doc.yml
@@ -33,14 +33,14 @@ jobs:
 
 Do **not** set `GITHUB_REPO_OWNER`, `GITHUB_REPO_NAME`, `PR_NUMBER`, or `GOOGLE_DOC_ID` as secrets. Owner, repo, PR number, and event come from the GitHub context. The Google Doc ID, if used, belongs in `.pr-doc.yml`.
 
-Pin to a major tag (`@v1`) once this repository publishes releases.
+Pin to a major tag (`babajide234/Pr-automation@v1`) once a release exists, or use `@main` until then.
 
 ## Configuration
 
 If `.pr-doc.yml` is missing or empty, these defaults apply:
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/<this-org>/pr-doc-engine/v1/schema/pr-doc.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/babajide234/Pr-automation/main/schema/pr-doc.schema.json
 version: 1
 
 sections:
@@ -138,7 +138,7 @@ GOOGLE_SERVICE_ACCOUNT=
                  .github/workflows/pr-doc.yml
                           │
                           ▼
-              uses: pr-doc-engine@v1
+              uses: babajide234/Pr-automation@v1
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
