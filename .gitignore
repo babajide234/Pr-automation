@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
-dist/
+# Build artifacts (keep the committed Action bundle)
+dist/*
+!dist/action/
+!dist/action/**
 
 # Environment variables
 .env
@@ -35,6 +38,7 @@ coverage/
 
 # Testing
 .nyc_output/
+/pr-*.json
 
 # TypeScript
 *.tsbuildinfo

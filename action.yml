@@ -1,0 +1,21 @@
+name: PR Doc Engine
+description: Validate pull request documentation and optionally archive it on merge.
+author: pr-doc-engine
+branding:
+  icon: book-open
+  color: blue
+inputs:
+  google-credentials:
+    description: Google service account JSON. Ignored when Google Docs is disabled in .pr-doc.yml.
+    required: false
+  config-path:
+    description: Path to the repository policy file.
+    required: false
+    default: .pr-doc.yml
+  github-token:
+    description: GitHub token used to read the PR and post validation comments.
+    required: false
+    default: ${{ github.token }}
+runs:
+  using: node20
+  main: dist/action/index.js

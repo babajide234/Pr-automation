@@ -1,14 +1,11 @@
-import dotenv from "dotenv";
-import { PRDocWorkflow } from "./application/pr-doc.workflow";
+import "./config/env";
+import { resolveActionContext } from "./infrastructure/context/runtime-context";
+import { handleFatal, runWorkflow } from "./run";
 
-dotenv.config();
-
-async function main() {
-    const workflow = new PRDocWorkflow();
-    await workflow.execute();
+async function main(): Promise<void> {
+    const ctx = resolveActionContext();
+    const code = await runWorkflow(ctx);
+    process.exit(code);
 }
 
-main().catch(err => {
-    console.error(err);
-    process.exit(1);
-});
+main().catch(handleFatal);

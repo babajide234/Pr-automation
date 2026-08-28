@@ -1,17 +1,33 @@
 import { google } from "googleapis";
-import { env, GOOGLE_SCOPES } from "../../config";
+import { GOOGLE_SCOPES } from "../../config/constants";
+import { ConfigurationError } from "../../domain/errors";
+
+export interface GoogleDocsClientOptions {
+    credentials: string;
+    documentId: string;
+}
 
 export class GoogleDocsClient {
-    async append(content: string) {
+    constructor(private readonly options: GoogleDocsClientOptions) {}
+
+    async append(content: string): Promise<void> {
+        let credentials: Record<string, unknown>;
+        try {
+            credentials = JSON.parse(this.options.credentials) as Record<string, unknown>;
+        } catch {
+            throw new ConfigurationError(
+                "GOOGLE_SERVICE_ACCOUNT is not valid JSON.",
+            );
+        }
+
         const auth = new google.auth.GoogleAuth({
-            credentials: JSON.parse(env.GOOGLE_SERVICE_ACCOUNT),
+            credentials,
             scopes: GOOGLE_SCOPES,
         });
-
         const docs = google.docs({ version: "v1", auth });
 
         await docs.documents.batchUpdate({
-            documentId: env.GOOGLE_DOC_ID,
+            documentId: this.options.documentId,
             requestBody: {
                 requests: [
                     {

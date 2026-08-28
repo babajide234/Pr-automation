@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pr-doc-engine/schema/pr-doc.schema.json",
+  "title": "pr-doc-engine config",
+  "description": "Per-repository documentation policy for pr-doc-engine.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Config schema version. Required when the file contains policy keys."
+    },
+    "extends": {
+      "type": "string",
+      "description": "Base config from a local path, npm package, or github:owner/repo@ref:path."
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["heading"],
+        "properties": {
+          "heading": {
+            "type": "string",
+            "description": "Markdown ## heading matched in the PR body."
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["error", "warn", "off"],
+            "default": "error"
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Deprecated alias for severity. true → error, false → off."
+          },
+          "extract_as": {
+            "type": "string",
+            "description": "Stable key used in the JSON artifact and archival body."
+          }
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reject_placeholders": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "placeholder_case_sensitive": { "type": "boolean" },
+        "placeholder_scope": {
+          "type": "string",
+          "enum": ["required_sections", "all_sections", "body"]
+        },
+        "fail_on_empty_required": { "type": "boolean" },
+        "exempt": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "labels": { "type": "array", "items": { "type": "string" } },
+            "authors": { "type": "array", "items": { "type": "string" } },
+            "draft": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "destinations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "google_docs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "document_id": { "type": "string" }
+          }
+        },
+        "json_artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "triggers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "validate_on": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "archive_on": { "type": "string", "const": "merge" }
+      }
+    }
+  }
+}

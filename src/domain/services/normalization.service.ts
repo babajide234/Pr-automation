@@ -1,24 +1,32 @@
+import { ResolvedConfig } from "../models/config";
 import { PRDocumentation } from "../models/pr-documentation";
 import { ParsingService } from "./parsing.service";
 
-export class NormalizationService {
-    private parser = new ParsingService();
+export interface PullRequestInput {
+    number: number;
+    title: string;
+    body: string | null;
+    user: { login: string };
+    merged_at: string | null;
+}
 
-    normalize(pr: any): PRDocumentation {
-        const body = pr.body;
+export class NormalizationService {
+    constructor(private readonly parser = new ParsingService()) {}
+
+    normalize(pr: PullRequestInput, config: ResolvedConfig): PRDocumentation {
+        const body = pr.body || "";
+        const sections: Record<string, string> = {};
+
+        for (const section of config.sections) {
+            sections[section.extract_as] = this.parser.extractSection(body, section.heading);
+        }
 
         return {
             prNumber: pr.number,
             title: pr.title,
             author: pr.user.login,
-            summary: this.parser.extractSection(body, "## Summary"),
-            technicalDesign: this.parser.extractSection(body, "## Technical Design"),
-            dbChanges: this.parser.extractSection(body, "## Database Changes"),
-            apiChanges: this.parser.extractSection(body, "## API Changes"),
-            breakingChanges: body.includes("Breaking Changes\nYes"),
-            deploymentNotes: this.parser.extractSection(body, "## Deployment Notes"),
-            rollbackPlan: this.parser.extractSection(body, "## Rollback Plan"),
             mergedAt: pr.merged_at,
+            sections,
         };
     }
 }

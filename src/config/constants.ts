@@ -1,12 +1,6 @@
-export const REQUIRED_PR_SECTIONS = [
-    "## Summary",
-    "## Technical Design",
-    "## Rollback Plan",
-];
+export const COMMENT_MARKER = "<!-- pr-doc-engine -->";
 
-export const DOC_SEPARATOR = `
-------------------------------------------------------------
-`;
+export const DEFAULT_CONFIG_PATH = ".pr-doc.yml";
 
 export const GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/documents",

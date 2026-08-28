@@ -1,212 +1,169 @@
-# PR Documentation Automation (pr-doc-engine)
+# pr-doc-engine
 
-A highly robust, modular, and automated engine that enforces Pull Request documentation standards and archives them securely to Google Docs and local JSON artifacts.
+A reusable GitHub Action that improves pull request documentation: a matching template, fail-fast validation while the author is still writing, and optional archival on merge.
 
-## Quick Start Checklist
-- [ ] **Node.js**: Ensure Node v20+ is installed (`node -v`).
-- [ ] **GitHub Access**: Obtain a Personal Access Token (`GITHUB_TOKEN`) with `repo` scope to read PR descriptions.
-- [ ] **Google Cloud**: Create a GCP Service Account, enable the Google Docs API, and download the JSON key.
-- [ ] **Encode Service Account**: Base64 encode the GCP JSON key to safely store it in CI/CD secrets.
-- [ ] **Env Vars**: Copy `.env.example` to `.env` and inject your variables.
-- [ ] **Install & Build**: Run `npm install` and `npm run build`.
-- [ ] **Execute**: Run `npm start` to execute the pipeline against the target PR.
+Any repository can adopt it with a short workflow file. Secrets stay secrets, runtime context comes from GitHub (or CLI flags), and per-repo policy lives in a committed `.pr-doc.yml` read from the **base branch**.
 
----
+## Adopt in another repository
 
-## Project Overview
+```yaml
+# .github/workflows/pr-doc.yml
+name: PR Documentation
 
-### Architecture Diagram
+on:
+  pull_request:
+    types: [opened, edited, synchronize, closed, ready_for_review]
 
-```text
-                      [ GitHub Webhook / Action ]
-                                  │
-                                  ▼
-┌───────────────────────────────────────────────────────────────────┐
-│                      Application Layer                            │
-│ ┌───────────────────────────────────────────────────────────────┐ │
-│ │                  PRDocWorkflow (Orchestrator)                 │ │
-│ └──────┬──────────────────────┬───────────────────────┬─────────┘ │
-└────────┼──────────────────────┼───────────────────────┼───────────┘
-         │                      │                       │
-         ▼                      ▼                       ▼
-┌──────────────────┐  ┌──────────────────┐  ┌───────────────────────┐
-│ Infrastructure   │  │ Domain Layer     │  │ Infrastructure Layer  │
-│ (Input/Source)   │  │ (Core Logic)     │  │ (Output/Storage)      │
-│                  │  │                  │  │                       │
-│ - GithubClient   │  │ - ValidationSvc  │  │ - GoogleDocsClient    │
-│                  │  │ - Normalization  │  │ - FileRepository      │
-│                  │  │ - Models         │  │                       │
-└──────────────────┘  └──────────────────┘  └───────────────────────┘
-         │                                              │      │
-         ▼                                              ▼      ▼
-    [ GitHub API ]                                 [ G-Docs ] [ Disk ]
+permissions:
+  contents: read
+  pull-requests: write   # for validation comments
+
+jobs:
+  pr-doc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: <this-org>/pr-doc-engine@v1
+        with:
+          google-credentials: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+          config-path: .pr-doc.yml
 ```
 
-### Core Workflow
-1. **Extraction**: `GithubClient` pulls the PR payload (status, author, body, commits).
-2. **Validation**: `ValidationService` checks for required markdown sections (e.g., `## Summary`, `## Rollback Plan`) and rejects placeholder text (e.g., `TBD`).
-3. **Normalization**: `NormalizationService` maps the raw PR data into a strongly-typed `PRDocumentation` model.
-4. **Archival**: `FileRepository` writes the raw JSON artifact to disk for long-term historical audits.
-5. **Publishing**: `GoogleDocsClient` formats the normalized data into a standard template and appends it to a centralized release notes or architecture document.
+`google-credentials` is ignored when Google Docs is disabled (the default). `config-path` defaults to `.pr-doc.yml`.
 
-### Key Design Decisions
-- **Layered Architecture (Ports & Adapters)**: External concerns (GitHub API, Google Docs) are kept strictly at the infrastructure layer. The domain contains pure business rules (validation logic), making the system highly testable without mocking HTTP calls everywhere.
-- **Fail-Fast Validation**: The CI job fails immediately if the PR description lacks required operational sections, forcing engineers to write quality docs before merging.
-- **Artifact Generation**: Alongside publishing to Google Docs, keeping a JSON artifact on disk allows for future database backfills, search indexing, or re-processing.
+Do **not** set `GITHUB_REPO_OWNER`, `GITHUB_REPO_NAME`, `PR_NUMBER`, or `GOOGLE_DOC_ID` as secrets. Owner, repo, PR number, and event come from the GitHub context. The Google Doc ID, if used, belongs in `.pr-doc.yml`.
 
----
+Pin to a major tag (`@v1`) once this repository publishes releases.
 
-## Folder Structure
+## Configuration
 
-```text
-src/
-├── application/         # Orchestrators. Glues domain and infrastructure together.
-│   └── pr-doc.workflow.ts 
-├── domain/              # The core rules of the system. Absolute zero external dependencies.
-│   ├── models/          # Entity types/interfaces (e.g., PRDocumentation).
-│   └── services/        # Pure business logic (Validation, Normalization).
-├── infrastructure/      # Everything that touches the outside world (I/O, Network).
-│   ├── github/          # GitHub API integration.
-│   ├── google/          # Google Workspace APIs.
-│   └── storage/         # Local SSD / JSON artifact writers.
-└── config/              # Environment binding and type-safety for configuration.
+If `.pr-doc.yml` is missing or empty, these defaults apply:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/<this-org>/pr-doc-engine/v1/schema/pr-doc.schema.json
+version: 1
+
+sections:
+  - heading: "## Summary"
+    severity: error
+    extract_as: summary
+  - heading: "## Technical Design"
+    severity: error
+    extract_as: technicalDesign
+  - heading: "## Rollback Plan"
+    severity: error
+    extract_as: rollbackPlan
+
+validation:
+  reject_placeholders: ["TBD", "TODO"]
+  placeholder_case_sensitive: false
+  placeholder_scope: required_sections
+  fail_on_empty_required: true
+  exempt:
+    labels: [dependencies, chore]
+    authors: ["dependabot[bot]", "renovate[bot]"]
+    draft: true
+
+destinations:
+  google_docs:
+    enabled: false
+    document_id: ""
+  json_artifact:
+    enabled: true
+
+triggers:
+  validate_on: [opened, edited, synchronize, ready_for_review]
+  archive_on: merge
 ```
 
-**Layering Philosophy**: 
-- **Domain** knows nothing. 
-- **Application** knows about Domain and Interfaces of Infrastructure. 
-- **Infrastructure** implements specific vendor SDKs.
+JSON Schema for editors: [`schema/pr-doc.schema.json`](schema/pr-doc.schema.json).
 
----
+### What goes where
 
-## Prerequisites
-- **Node.js**: v20 or LTS equivalents.
-- **Google Cloud**: A project with `Google Docs API` enabled. A Service Account with `Editor` access to the target Document ID.
-- **GitHub**: Target repository must have Actions enabled. The workflow requires `contents: read` and `pull-requests: write` permissions.
+| Bucket | Examples | Source |
+|---|---|---|
+| Secrets | `GITHUB_TOKEN`, `GOOGLE_SERVICE_ACCOUNT` | Env / Actions secrets |
+| Runtime context | owner, repo, PR number, event, base SHA | GitHub event or CLI flags |
+| Policy | headings, severity, placeholders, destinations, exemptions | `.pr-doc.yml` |
 
----
+### Fork safety
 
-## Environment Configuration
+On `pull_request` events the engine fetches `.pr-doc.yml` at the **base SHA**, not from the PR head. A fork PR cannot weaken the standard it is being judged against. A PR that changes `.pr-doc.yml` is validated against the old policy; the new file takes effect after it is merged. The head-branch file is still schema-checked and any diff is reported in the validation comment as advisory.
 
-Create a `.env` file locally, or map these in GitHub Actions Secrets:
+On `push`, `workflow_dispatch`, and local CLI runs, config is read from the working tree.
 
-```dotenv
-# GitHub
-GITHUB_TOKEN=ghp_your_personal_access_token
-GITHUB_REPOSITORY=owner/repo     # Format expected by Action
-PR_NUMBER=123                    # Injected by CI
+### Severity and exemptions
 
-# Google Docs
-GOOGLE_DOC_ID=1A2b3C4d5E6f7g8h9i0j-XYZ
-GOOGLE_CREDENTIALS_BASE64=ewogICJ0eXBlIjog...
-```
+- `error` blocks merge (non-zero exit). `warn` is comment-only. `off` extracts if present and never reports.
+- Start new sections at `warn` when rolling out on a repo with open PRs, then promote to `error`.
+- Dependabot/Renovate and draft PRs are exempt by default so adoption does not turn CI permanently red.
 
-### Encoding Google Service Account Safely
-Never store the raw JSON file in git. Encode it:
-```bash
-cat service-account.json | base64 > encoded.txt
-```
-Copy instructions from `encoded.txt` directly to `GOOGLE_CREDENTIALS_BASE64` in GitHub Secrets. The application will decode it in memory.
+### Google Docs
 
----
+Google Docs is optional. Enable it in config and store the service-account JSON as `GOOGLE_SERVICE_ACCOUNT`. A missing `document_id` or credential is a configuration error, not a Google API 404.
 
-## Local Development Guide
+A richer heading set (the previous emoji template) lives in [`examples/rich-template/`](examples/rich-template/).
 
-### Installation & Running
+## Local CLI
+
 ```bash
 npm install
 npm run build
+
+npx pr-doc-engine validate --pr 123
+npx pr-doc-engine archive --pr 123
+npx pr-doc-engine config print
+npx pr-doc-engine template --out .github/pull_request_template.md
 ```
 
-### Simulating PR Execution
-To test locally, set a valid `PR_NUMBER` in your `.env` for an open PR on your configured repository, then run:
+- Token: `GITHUB_TOKEN` in `.env`, or `gh auth token`
+- Owner/repo: `git remote` or `--repo owner/name`
+- Policy: `.pr-doc.yml` or `--config`
+- `--pr` is required for `validate` / `archive`
+
+`.env` may hold only:
+
+```dotenv
+GITHUB_TOKEN=
+GOOGLE_SERVICE_ACCOUNT=
+```
+
+`GOOGLE_SERVICE_ACCOUNT` is optional for validate-only runs.
+
+## Architecture
+
+```text
+                 [ Consuming repo ]
+                 .pr-doc.yml  (read at BASE ref)
+                 .github/workflows/pr-doc.yml
+                          │
+                          ▼
+              uses: pr-doc-engine@v1
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Application: PRDocWorkflow                                  │
+│  mode = validate | archive  (from GitHub event / --mode)    │
+│  config = ConfigLoader(base sha) → defaults → extends       │
+│  creds  = CredentialResolver(provider)                      │
+└──────────┬──────────────────┬──────────────────┬────────────┘
+           ▼                  ▼                  ▼
+   GithubClient         Domain (pure)      Destinations
+   token = secret       Validation         JSON (policy)
+   owner/repo/PR        Normalization      Google Docs
+     = context          Parsing              (policy + secret)
+                        rules = data
+```
+
+Validate runs on open/edit/sync (and `ready_for_review`). Archive runs only when a PR is closed and merged. Unmerged close is a no-op. If merge-time validation fails at `error` severity, archival is skipped.
+
+## Development
+
 ```bash
-npm start
+npm install
+npm test
+npm run build
+npm run bundle   # ncc bundle for the GitHub Action (dist/action)
 ```
 
-### Mocking GitHub Events
-If you want to work completely offline, you can instantiate a mock version of `GithubClient` in `pr-doc.workflow.ts` that returns a static JavaScript object matching the expected PR payload.
-
----
-
-## Testing Guide
-
-### Strategy
-- **Unit Tests (Domain)**: 100% coverage on `ValidationService` and `NormalizationService`. These should be pure functions. Inject various strings, assert errors are thrown or data is correctly shaped.
-- **Integration Tests (Infrastructure)**: Test `GithubClient` against a public repository or mock the `@octokit/rest` HTTP calls using Nock or MSW. 
-
-### Edge Cases to Test
-- PR body is `null` (already patched in workflow).
-- PR body contains the exact string "TBD" but in lower-case "tbd" (ensure validation handles case-insensitivity if required).
-- Google Doc is locked or deleted.
-- Rate limiting by GitHub (429 Too Many Requests).
-
-### Simulating Failures
-Intentionally break the Google base64 string or remove the `## Rollback Plan` from a test PR to ensure the workflow fails cleanly and exits with a non-zero status code (e.g., `process.exit(1)`).
-
----
-
-## CI/CD Guide
-
-### How the Action Works
-When a PR is `opened`, `edited`, or `synchronize` (new commit), the GitHub Action runs the engine. If validation fails, the Action turns red, blocking the merge (if branch protection requires this status check). Once approved and merged, you can configure a separate run that actually appends the Google Doc (to prevent spamming docs on non-merged PRs).
-
-### Debugging CI Failures
-1. Enable step-debug logging in GitHub by setting a repository secret `ACTIONS_STEP_DEBUG` to `true`.
-2. Review the Action logs. If it's a validation error, the engineer needs to fix their PR description. If it's an infrastructure error, inspect the stack trace for API rejections.
-
----
-
-## Deployment Guide
-
-This is strictly a continuous integration tool. "Deployment" means enabling it on a repository.
-
-1. Configure GitHub Actions Workflow YAML file in `.github/workflows/pr-documentation.yml`.
-2. Setup the Organizational or Repository Secrets for `GITHUB_TOKEN` and `GOOGLE_CREDENTIALS_BASE64`.
-3. Set up the `GOOGLE_DOC_ID` in the repository variables.
-
-### Credential Rotation
-GCP Service Accounts should be rotated every 90 days. Generate a new key, base64 encode it, update the GitHub Secret, then delete the old key in the GCP Console.
-
----
-
-## Security Considerations
-
-- **Secret Handling**: Base64 JSON decoding limits the risk of multiline formatting issues leaking secrets into logs.
-- **Permission Scoping**: The GCP Service account should *only* have permissions to edit the specific Google Docs needed, not organization-wide Drive access.
-- **Avoiding Injection**: PR bodies shouldn't be executed. The system treats them securely as pure strings, mitigating arbitrary code execution.
-
----
-
-## Production Checklist
-
-- [ ] All environment variables are stored in GitHub Secrets (not Variables).
-- [ ] PR branch protection is configured to require this Job's successful run.
-- [ ] A dedicated Service Account is provisioned (do not use personal accounts).
-- [ ] `.gitignore` contains `.env`, `*.json` (for artifacts), and `node_modules/`.
-- [ ] OIDC (Workload Identity Federation) has been evaluated as a safer alternative to static JSON keys for GCP.
-
----
-
-## Operational Checklist
-
-- **Monitoring**: Since this is a CI pipeline, monitor the success/failure rate of the GitHub Action overall. 
-- **Logs**: Do not log raw PR bodies if they contain sensitive data. Log PR Numbers, Author Handles, and Validation rule failures.
-- **Alerting**: Alert the DevOps team via Slack if the pipeline fails with HTTP 500s or Authentication Errors. Validation errors should just ping the PR Author.
-
----
-
-## Common Failure Modes
-
-1. **`TypeError: Cannot read properties of null`** -> The PR Body missing, bypassed by validating against `pr.body || ""`.
-2. **`429 Too Many Requests` (GitHub)** -> Action ran on a monorepo with 50 PRs simultaneously. Implement Backoff strategies.
-3. **`403 Forbidden` (Google Docs)** -> The master Google Doc was deleted or its permissions were changed, stripping the Service Account of its write access.
-4. **Duplicate Entries in G-Docs** -> Action is run on `pull_request: synchronize`. Ensure the append action is *only* triggered on `pull_request: closed` and `if: github.event.pull_request.merged == true` in your workflow YAML.
-
----
-
-## Extension Roadmap
-
-- **Idempotency Updates**: Instead of blindly appending, use document search to find historical entries and overwrite them.
-- **AI Enhancement**: Add `OpenAIClient` to automatically generate the `## Summary` if it's missing or poor quality.
-- **Metrics Dashboard**: Centralize the generated JSON artifacts into a Postgres DB to build metrics on PR quality over time.
+The dogfood workflow in this repo uses `uses: ./`.

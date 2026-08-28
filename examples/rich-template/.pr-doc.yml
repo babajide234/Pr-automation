@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=../../schema/pr-doc.schema.json
+version: 1
+sections:
+  - heading: "## 📝 Release Notes Description"
+    severity: error
+    extract_as: releaseNotes
+  - heading: "## 🎯 Problem Statement & Goal"
+    severity: error
+    extract_as: problemStatement
+  - heading: "## 🤔 Architectural Decisions & Tradeoffs"
+    severity: error
+    extract_as: architecturalDecisions
+  - heading: "## Frontend Changes"
+    severity: warn
+    extract_as: frontendChanges
+  - heading: "## Backend & Infrastructure Changes"
+    severity: warn
+    extract_as: backendChanges
+  - heading: "## Risk Analysis & Rollback Plan"
+    severity: error
+    extract_as: rollbackPlan
+  - heading: "## Testing & Verification"
+    severity: warn
+    extract_as: testing
+  - heading: "## Pre-Merge Checklist"
+    severity: off
+    extract_as: checklist
