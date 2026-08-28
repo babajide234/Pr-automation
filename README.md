@@ -33,7 +33,7 @@ jobs:
 
 Do **not** set `GITHUB_REPO_OWNER`, `GITHUB_REPO_NAME`, `PR_NUMBER`, or `GOOGLE_DOC_ID` as secrets. Owner, repo, PR number, and event come from the GitHub context. The Google Doc ID, if used, belongs in `.pr-doc.yml`.
 
-Pin to a major tag (`babajide234/Pr-automation@v1`) once a release exists, or use `@main` until then.
+Pin to a major tag: `babajide234/Pr-automation@v1`.
 
 ## Configuration
 
