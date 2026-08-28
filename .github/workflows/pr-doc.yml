@@ -14,5 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           config-path: .pr-doc.yml

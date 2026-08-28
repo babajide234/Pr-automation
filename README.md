@@ -24,6 +24,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: babajide234/Pr-automation@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           google-credentials: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
           config-path: .pr-doc.yml
